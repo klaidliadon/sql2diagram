@@ -47,7 +47,7 @@ func Render(ctx context.Context, schemaDef *schema.Schema) ([]byte, error) {
 		return nil, fmt.Errorf("d2 render to svg: %w", err)
 	}
 
-	return out, nil
+	return postProcessSVG(out), nil
 }
 
 func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph, error) {
