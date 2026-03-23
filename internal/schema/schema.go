@@ -45,9 +45,7 @@ func Parse(input string) (*Schema, error) {
 }
 
 func astTreeToSchema(tree *pgQuery.ParseResult) (*Schema, error) {
-	schema := &Schema{
-		Tables: make([]*Table, 0),
-	}
+	schema := &Schema{}
 
 	for _, stmt := range tree.Stmts {
 		switch node := stmt.Stmt.Node.(type) {
@@ -157,9 +155,7 @@ func toTable(stmt *pgQuery.Node_CreateStmt) *Table {
 }
 
 func generateColumnProperties(columnDefinition *pgQuery.ColumnDef) *Column {
-	column := &Column{
-		Name: columnDefinition.Colname,
-	}
+	column := &Column{Name: columnDefinition.Colname}
 
 	for _, node := range columnDefinition.TypeName.Names {
 		stringNode, ok := node.Node.(*pgQuery.Node_String_)
@@ -198,28 +194,16 @@ func generateColumnProperties(columnDefinition *pgQuery.ColumnDef) *Column {
 					column.Constraints = append(column.Constraints, "unique")
 				}
 			case pgQuery.ConstrType_CONSTR_FOREIGN:
-				foreignReference := &ForeignReference{
-					Table: nodeConstraint.Constraint.Pktable.Relname,
-				}
-
-				var found bool
+				fk := &ForeignReference{Table: nodeConstraint.Constraint.Pktable.Relname}
 				for _, pkattr := range nodeConstraint.Constraint.PkAttrs {
-					node, ok := pkattr.Node.(*pgQuery.Node_String_)
-					if !ok {
-						continue
+					if n, ok := pkattr.Node.(*pgQuery.Node_String_); ok {
+						fk.Column = n.String_.Sval
 					}
-
-					for _, fkr := range column.ForeignKeyReferences {
-						if fkr.Table == nodeConstraint.Constraint.Pktable.Relname && fkr.Column == node.String_.Sval {
-							found = true
-						}
-					}
-
-					foreignReference.Column = node.String_.Sval
 				}
-
-				if !found {
-					column.ForeignKeyReferences = append(column.ForeignKeyReferences, foreignReference)
+				if !slices.ContainsFunc(column.ForeignKeyReferences, func(r *ForeignReference) bool {
+					return r.Table == fk.Table && r.Column == fk.Column
+				}) {
+					column.ForeignKeyReferences = append(column.ForeignKeyReferences, fk)
 				}
 			case pgQuery.ConstrType_CONSTR_NOTNULL:
 				if !slices.Contains(column.Constraints, "not null") {

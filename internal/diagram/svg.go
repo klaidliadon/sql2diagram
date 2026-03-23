@@ -41,7 +41,7 @@ func postProcessSVG(svg []byte) []byte {
 		tableX := tableRectMatch[1]
 		tableWidth := tableRectMatch[3]
 
-		backgrounds := make([]string, 0)
+		var backgrounds []string
 		rowMatches := rowMetaRegex.FindAllStringSubmatch(group, -1)
 		for _, row := range rowMatches {
 			if len(row) < 3 {
@@ -59,13 +59,9 @@ func postProcessSVG(svg []byte) []byte {
 				continue
 			}
 
-			rowTop := lineY - 36
 			backgrounds = append(backgrounds, fmt.Sprintf(
 				`<rect x="%s" y="%.6f" width="%s" height="36.000000" class="row_constraint_bg" style="fill:%s;stroke:none;" />`,
-				tableX,
-				rowTop,
-				tableWidth,
-				rowBackgroundColor,
+				tableX, lineY-36, tableWidth, rowBackgroundColor,
 			))
 		}
 
@@ -83,19 +79,16 @@ func postProcessSVG(svg []byte) []byte {
 }
 
 func rowBackgroundByConstraint(label string) string {
-	if strings.Contains(label, "(FK)") {
-		return fkRowBackgroundColor
-	}
-
-	if strings.Contains(label, "(PK)") {
+	switch {
+	case strings.Contains(label, "(PK)"):
 		return pkRowBackgroundColor
-	}
-
-	if strings.Contains(label, "(UNIQUE)") || strings.Contains(label, "(UQ)") {
+	case strings.Contains(label, "(FK)"):
+		return fkRowBackgroundColor
+	case strings.Contains(label, "(UNIQUE)"), strings.Contains(label, "(UQ)"):
 		return uniqueRowColor
+	default:
+		return ""
 	}
-
-	return ""
 }
 
 func uniqueConstraintRowKey(index int) string {

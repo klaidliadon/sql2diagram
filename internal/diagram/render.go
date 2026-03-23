@@ -73,15 +73,13 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 			}
 
 			if slices.Contains(column.Constraints, "primary") {
-				columnType = fmt.Sprintf("%s (PK)", columnType)
+				columnType += " (PK)"
 			}
-
 			if slices.Contains(column.Constraints, "unique") {
-				columnType = fmt.Sprintf("%s (UNIQUE)", columnType)
+				columnType += " (UNIQUE)"
 			}
-
 			if len(column.ForeignKeyReferences) > 0 {
-				columnType = fmt.Sprintf("%s (FK)", columnType)
+				columnType += " (FK)"
 			}
 
 			if _, err = d2oracle.Set(g, fmt.Sprintf("%s.%s", table.Name, column.Name), nil, &columnType); err != nil {
