@@ -119,7 +119,7 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 		}
 
 		for i, uniqueColumns := range table.UniqueConstraints {
-			rowName := fmt.Sprintf("UNIQUE_%d", i+1)
+			rowName := uniqueConstraintRowKey(i)
 			rowType := fmt.Sprintf("(%s) (UQ)", strings.Join(uniqueColumns, ", "))
 
 			if _, err = d2oracle.Set(g, fmt.Sprintf("%s.%s", table.Name, rowName), nil, &rowType); err != nil {

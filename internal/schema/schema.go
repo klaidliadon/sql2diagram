@@ -168,6 +168,7 @@ func toTable(stmt *pgQuery.Node_CreateStmt) *Table {
 	table := &Table{
 		Name: stmt.CreateStmt.Relation.Relname,
 	}
+	pendingSingleColumnUniques := make([]string, 0)
 
 	for _, columnNode := range stmt.CreateStmt.TableElts {
 		columnNodeDefinition, ok := columnNode.Node.(*pgQuery.Node_ColumnDef)
@@ -183,12 +184,7 @@ func toTable(stmt *pgQuery.Node_CreateStmt) *Table {
 
 			uniqueColumns := constraintColumns(tableConstraintNode.Constraint.Keys)
 			if len(uniqueColumns) == 1 {
-				for _, col := range table.Columns {
-					if col.Name == uniqueColumns[0] {
-						col.Constraints = appendConstraint(col.Constraints, "unique")
-						break
-					}
-				}
+				pendingSingleColumnUniques = append(pendingSingleColumnUniques, uniqueColumns[0])
 			} else if len(uniqueColumns) > 1 && !containsUniqueConstraint(table.UniqueConstraints, uniqueColumns) {
 				table.UniqueConstraints = append(table.UniqueConstraints, uniqueColumns)
 			}
@@ -197,6 +193,15 @@ func toTable(stmt *pgQuery.Node_CreateStmt) *Table {
 		}
 
 		table.Columns = append(table.Columns, generateColumnProperties(columnNodeDefinition.ColumnDef))
+	}
+
+	for _, columnName := range pendingSingleColumnUniques {
+		for _, col := range table.Columns {
+			if col.Name == columnName {
+				col.Constraints = appendConstraint(col.Constraints, "unique")
+				break
+			}
+		}
 	}
 
 	return table
