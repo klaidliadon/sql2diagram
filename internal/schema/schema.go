@@ -22,10 +22,15 @@ type Table struct {
 	UniqueConstraints [][]string
 }
 
+type Constraints []string
+
+func (c *Constraints) Has(value string) bool  { return slices.Contains(*c, value) }
+func (c *Constraints) Add(value string)        { if !c.Has(value) { *c = append(*c, value) } }
+
 type Column struct {
 	Name                 string
 	Type                 string
-	Constraints          []string
+	Constraints          Constraints
 	ForeignKeyReferences []*ForeignReference
 	Length               int
 }
@@ -62,17 +67,9 @@ func astTreeToSchema(tree *pgQuery.ParseResult) (*Schema, error) {
 }
 
 func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
-	var sourceTable *Table
-
-	for _, t := range schema.Tables {
-		if t.Name == stmt.Relation.Relname {
-			sourceTable = t
-			break
-		}
-	}
-
+	sourceTable := schema.findTable(stmt.Relation.Relname)
 	if sourceTable == nil {
-		return fmt.Errorf("sourceTable could not be found in schema")
+		return fmt.Errorf("table %q not found in schema", stmt.Relation.Relname)
 	}
 
 	for _, cmd := range stmt.Cmds {
@@ -93,7 +90,7 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 		if constraint.Constraint.Contype == pgQuery.ConstrType_CONSTR_PRIMARY {
 			for _, name := range constraintColumns(constraint.Constraint.Keys) {
 				if col := sourceTable.findColumn(name); col != nil {
-					col.Constraints = append(col.Constraints, "primary")
+					col.Constraints.Add("primary")
 				}
 			}
 			continue
@@ -188,32 +185,27 @@ func generateColumnProperties(columnDefinition *pgQuery.ColumnDef) *Column {
 
 			switch nodeConstraint.Constraint.Contype {
 			case pgQuery.ConstrType_CONSTR_PRIMARY:
-				column.Constraints = append(column.Constraints, "primary")
+				column.Constraints.Add("primary")
 			case pgQuery.ConstrType_CONSTR_UNIQUE:
-				if !slices.Contains(column.Constraints, "unique") {
-					column.Constraints = append(column.Constraints, "unique")
-				}
-			case pgQuery.ConstrType_CONSTR_FOREIGN:
-				fk := &ForeignReference{Table: nodeConstraint.Constraint.Pktable.Relname}
-				for _, pkattr := range nodeConstraint.Constraint.PkAttrs {
-					if n, ok := pkattr.Node.(*pgQuery.Node_String_); ok {
-						fk.Column = n.String_.Sval
-					}
-				}
-				if !slices.ContainsFunc(column.ForeignKeyReferences, func(r *ForeignReference) bool {
-					return r.Table == fk.Table && r.Column == fk.Column
-				}) {
-					column.ForeignKeyReferences = append(column.ForeignKeyReferences, fk)
-				}
+				column.Constraints.Add("unique")
 			case pgQuery.ConstrType_CONSTR_NOTNULL:
-				if !slices.Contains(column.Constraints, "not null") {
-					column.Constraints = append(column.Constraints, "not null")
-				}
+				column.Constraints.Add("not null")
+			case pgQuery.ConstrType_CONSTR_FOREIGN:
+				column.addForeignKey(nodeConstraint.Constraint)
 			}
 		}
 	}
 
 	return column
+}
+
+func (s *Schema) findTable(name string) *Table {
+	for _, t := range s.Tables {
+		if t.Name == name {
+			return t
+		}
+	}
+	return nil
 }
 
 func (t *Table) findColumn(name string) *Column {
@@ -228,12 +220,24 @@ func (t *Table) findColumn(name string) *Column {
 func (t *Table) addUniqueConstraint(columns []string) {
 	if len(columns) == 1 {
 		if col := t.findColumn(columns[0]); col != nil {
-			if !slices.Contains(col.Constraints, "unique") {
-				col.Constraints = append(col.Constraints, "unique")
-			}
+			col.Constraints.Add("unique")
 		}
 	} else if len(columns) > 1 && !slices.ContainsFunc(t.UniqueConstraints, func(e []string) bool { return slices.Equal(e, columns) }) {
 		t.UniqueConstraints = append(t.UniqueConstraints, columns)
+	}
+}
+
+func (c *Column) addForeignKey(con *pgQuery.Constraint) {
+	fk := &ForeignReference{Table: con.Pktable.Relname}
+	for _, pkattr := range con.PkAttrs {
+		if n, ok := pkattr.Node.(*pgQuery.Node_String_); ok {
+			fk.Column = n.String_.Sval
+		}
+	}
+	if !slices.ContainsFunc(c.ForeignKeyReferences, func(r *ForeignReference) bool {
+		return r.Table == fk.Table && r.Column == fk.Column
+	}) {
+		c.ForeignKeyReferences = append(c.ForeignKeyReferences, fk)
 	}
 }
 
