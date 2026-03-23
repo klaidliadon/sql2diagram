@@ -1,0 +1,128 @@
+package diagram
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/golang-cz/sql2diagram/internal/schema"
+	"oss.terrastruct.com/d2/d2format"
+	"oss.terrastruct.com/d2/d2graph"
+	"oss.terrastruct.com/d2/d2layouts/d2dagrelayout"
+	"oss.terrastruct.com/d2/d2lib"
+	"oss.terrastruct.com/d2/d2oracle"
+	"oss.terrastruct.com/d2/d2renderers/d2svg"
+	"oss.terrastruct.com/d2/lib/textmeasure"
+)
+
+func Render(ctx context.Context, schemaDef *schema.Schema) ([]byte, error) {
+	_, graph, err := d2lib.Compile(ctx, "", nil)
+	if err != nil {
+		return nil, fmt.Errorf("d2 compile: %w", err)
+	}
+
+	graph, err = transformGraph(schemaDef, graph)
+	if err != nil {
+		return nil, fmt.Errorf("transform graph: %w", err)
+	}
+
+	script := d2format.Format(graph.AST)
+
+	ruler, err := textmeasure.NewRuler()
+	if err != nil {
+		return nil, fmt.Errorf("d2 textmeasure new ruler: %w", err)
+	}
+
+	diagram, _, err := d2lib.Compile(ctx, script, &d2lib.CompileOptions{
+		Layout: d2dagrelayout.DefaultLayout,
+		Ruler:  ruler,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("d2 compile new ruler: %w", err)
+	}
+
+	out, err := d2svg.Render(diagram, &d2svg.RenderOpts{
+		Pad: d2svg.DEFAULT_PADDING,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("d2 render to svg: %w", err)
+	}
+
+	return out, nil
+}
+
+func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph, error) {
+	for _, table := range schemaDef.Tables {
+		_, newKey, err := d2oracle.Create(g, table.Name)
+		if err != nil {
+			return nil, fmt.Errorf("d2 oracle create: %w", err)
+		}
+
+		shape := "sql_table"
+		if _, err = d2oracle.Set(g, fmt.Sprintf("%s.shape", newKey), nil, &shape); err != nil {
+			return nil, fmt.Errorf("d2 oracle create: %w", err)
+		}
+
+		for _, column := range table.Columns {
+			columnType := column.Type
+			if column.Length > 0 {
+				columnType = fmt.Sprintf("%s(%d)", column.Type, column.Length)
+			}
+
+			if !hasConstraint(column.Constraints, "not null") {
+				columnType += " NULL"
+			}
+
+			if hasConstraint(column.Constraints, "primary") {
+				columnType = fmt.Sprintf("%s (PK)", columnType)
+			}
+
+			if len(column.ForeignKeyReferences) > 0 {
+				columnType = fmt.Sprintf("%s (FK)", columnType)
+			}
+
+			if _, err = d2oracle.Set(g, fmt.Sprintf("%s.%s", table.Name, column.Name), nil, &columnType); err != nil {
+				return nil, fmt.Errorf("d2 set: %w", err)
+			}
+
+			for _, foreignReference := range column.ForeignKeyReferences {
+				referencedColumnName := foreignReference.Column
+				for _, t := range schemaDef.Tables {
+					if t.Name != foreignReference.Table {
+						continue
+					}
+
+					for _, col := range t.Columns {
+						if col.Name == foreignReference.Column {
+							referencedColumnName = col.Name
+							break
+						}
+					}
+					break
+				}
+
+				tableReferences := fmt.Sprintf(
+					"%s.%s -> %s.%s",
+					table.Name,
+					column.Name,
+					foreignReference.Table,
+					referencedColumnName,
+				)
+				if _, _, err = d2oracle.Create(g, tableReferences); err != nil {
+					return nil, fmt.Errorf("d2 oracle create: %w", err)
+				}
+			}
+		}
+	}
+
+	return g, nil
+}
+
+func hasConstraint(constraints []string, value string) bool {
+	for _, constraint := range constraints {
+		if constraint == value {
+			return true
+		}
+	}
+
+	return false
+}
