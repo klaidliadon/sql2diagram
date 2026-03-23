@@ -95,7 +95,7 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 					fk.Column = n.String_.Sval
 				}
 			}
-			for _, name := range cols {
+			for _, name := range constraintColumns(constraint.Constraint.FkAttrs) {
 				if col := sourceTable.findColumn(name); col != nil {
 					col.ForeignKeyReferences = append(col.ForeignKeyReferences, fk)
 				}
@@ -228,4 +228,3 @@ func constraintColumns(keys []*pgQuery.Node) []string {
 	}
 	return cols
 }
-

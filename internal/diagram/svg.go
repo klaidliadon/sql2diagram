@@ -80,10 +80,10 @@ func postProcessSVG(svg []byte) []byte {
 
 func rowBackgroundByConstraint(label string) string {
 	switch {
-	case strings.Contains(label, "(PK)"):
-		return pkRowBackgroundColor
 	case strings.Contains(label, "(FK)"):
 		return fkRowBackgroundColor
+	case strings.Contains(label, "(PK)"):
+		return pkRowBackgroundColor
 	case strings.Contains(label, "(UNIQUE)"), strings.Contains(label, "(UQ)"):
 		return uniqueRowColor
 	default:
