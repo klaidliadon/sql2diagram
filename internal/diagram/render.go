@@ -42,9 +42,7 @@ func Render(ctx context.Context, schemaDef *schema.Schema) ([]byte, error) {
 		return nil, fmt.Errorf("d2 compile new ruler: %w", err)
 	}
 
-	out, err := d2svg.Render(diagram, &d2svg.RenderOpts{
-		Pad: d2svg.DEFAULT_PADDING,
-	})
+	out, err := d2svg.Render(diagram, &d2svg.RenderOpts{Pad: d2svg.DEFAULT_PADDING})
 	if err != nil {
 		return nil, fmt.Errorf("d2 render to svg: %w", err)
 	}
@@ -90,30 +88,9 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 				return nil, fmt.Errorf("d2 set: %w", err)
 			}
 
-			for _, foreignReference := range column.ForeignKeyReferences {
-				referencedColumnName := foreignReference.Column
-				for _, t := range schemaDef.Tables {
-					if t.Name != foreignReference.Table {
-						continue
-					}
-
-					for _, col := range t.Columns {
-						if col.Name == foreignReference.Column {
-							referencedColumnName = col.Name
-							break
-						}
-					}
-					break
-				}
-
-				tableReferences := fmt.Sprintf(
-					"%s.%s -> %s.%s",
-					table.Name,
-					column.Name,
-					foreignReference.Table,
-					referencedColumnName,
-				)
-				if _, _, err = d2oracle.Create(g, tableReferences); err != nil {
+			for _, fk := range column.ForeignKeyReferences {
+				ref := fmt.Sprintf("%s.%s -> %s.%s", table.Name, column.Name, fk.Table, fk.Column)
+				if _, _, err = d2oracle.Create(g, ref); err != nil {
 					return nil, fmt.Errorf("d2 oracle create: %w", err)
 				}
 			}

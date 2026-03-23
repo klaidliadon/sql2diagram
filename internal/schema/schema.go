@@ -93,38 +93,16 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 		}
 
 		if constraint.Constraint.Contype == pgQuery.ConstrType_CONSTR_PRIMARY {
-			for _, key := range constraint.Constraint.Keys {
-				node, ok := key.Node.(*pgQuery.Node_String_)
-				if !ok {
-					continue
-				}
-
-				for _, col := range sourceTable.Columns {
-					if col.Name == node.String_.Sval {
-						col.Constraints = append(col.Constraints, "primary")
-						break
-					}
+			for _, name := range constraintColumns(constraint.Constraint.Keys) {
+				if col := sourceTable.findColumn(name); col != nil {
+					col.Constraints = append(col.Constraints, "primary")
 				}
 			}
 			continue
 		}
 
 		if constraint.Constraint.Contype == pgQuery.ConstrType_CONSTR_UNIQUE {
-			uniqueColumns := constraintColumns(constraint.Constraint.Keys)
-
-			if len(uniqueColumns) == 1 {
-				for _, col := range sourceTable.Columns {
-					if col.Name == uniqueColumns[0] {
-						if !slices.Contains(col.Constraints, "unique") {
-							col.Constraints = append(col.Constraints, "unique")
-						}
-						break
-					}
-				}
-			} else if len(uniqueColumns) > 1 && !slices.ContainsFunc(sourceTable.UniqueConstraints, func(e []string) bool { return slices.Equal(e, uniqueColumns) }) {
-				sourceTable.UniqueConstraints = append(sourceTable.UniqueConstraints, uniqueColumns)
-			}
-
+			sourceTable.addUniqueConstraint(constraintColumns(constraint.Constraint.Keys))
 			continue
 		}
 
@@ -132,16 +110,12 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 			continue
 		}
 
-		foreignReference := &ForeignReference{
-			Table: constraint.Constraint.Pktable.Relname,
-		}
+		fk := &ForeignReference{Table: constraint.Constraint.Pktable.Relname}
 
 		for _, pkattr := range constraint.Constraint.PkAttrs {
-			node, ok := pkattr.Node.(*pgQuery.Node_String_)
-			if !ok {
-				continue
+			if node, ok := pkattr.Node.(*pgQuery.Node_String_); ok {
+				fk.Column = node.String_.Sval
 			}
-			foreignReference.Column = node.String_.Sval
 		}
 
 		for _, fkattr := range constraint.Constraint.FkAttrs {
@@ -149,17 +123,8 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 			if !ok {
 				continue
 			}
-
-			var column *Column
-			for _, col := range sourceTable.Columns {
-				if col.Name == node.String_.Sval {
-					column = col
-					break
-				}
-			}
-
-			if column != nil {
-				column.ForeignKeyReferences = append(column.ForeignKeyReferences, foreignReference)
+			if col := sourceTable.findColumn(node.String_.Sval); col != nil {
+				col.ForeignKeyReferences = append(col.ForeignKeyReferences, fk)
 			}
 		}
 	}
@@ -168,45 +133,24 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 }
 
 func toTable(stmt *pgQuery.Node_CreateStmt) *Table {
-	table := &Table{
-		Name: stmt.CreateStmt.Relation.Relname,
-	}
-	pendingSingleColumnUniques := make([]string, 0)
+	table := &Table{Name: stmt.CreateStmt.Relation.Relname}
+	var pendingUniques [][]string
 
 	for _, columnNode := range stmt.CreateStmt.TableElts {
-		columnNodeDefinition, ok := columnNode.Node.(*pgQuery.Node_ColumnDef)
-		if !ok {
-			tableConstraintNode, ok := columnNode.Node.(*pgQuery.Node_Constraint)
-			if !ok {
-				continue
-			}
-
-			if tableConstraintNode.Constraint.Contype != pgQuery.ConstrType_CONSTR_UNIQUE {
-				continue
-			}
-
-			uniqueColumns := constraintColumns(tableConstraintNode.Constraint.Keys)
-			if len(uniqueColumns) == 1 {
-				pendingSingleColumnUniques = append(pendingSingleColumnUniques, uniqueColumns[0])
-			} else if len(uniqueColumns) > 1 && !slices.ContainsFunc(table.UniqueConstraints, func(e []string) bool { return slices.Equal(e, uniqueColumns) }) {
-				table.UniqueConstraints = append(table.UniqueConstraints, uniqueColumns)
-			}
-
+		if colDef, ok := columnNode.Node.(*pgQuery.Node_ColumnDef); ok {
+			table.Columns = append(table.Columns, generateColumnProperties(colDef.ColumnDef))
 			continue
 		}
 
-		table.Columns = append(table.Columns, generateColumnProperties(columnNodeDefinition.ColumnDef))
+		constraint, ok := columnNode.Node.(*pgQuery.Node_Constraint)
+		if !ok || constraint.Constraint.Contype != pgQuery.ConstrType_CONSTR_UNIQUE {
+			continue
+		}
+		pendingUniques = append(pendingUniques, constraintColumns(constraint.Constraint.Keys))
 	}
 
-	for _, columnName := range pendingSingleColumnUniques {
-		for _, col := range table.Columns {
-			if col.Name == columnName {
-				if !slices.Contains(col.Constraints, "unique") {
-					col.Constraints = append(col.Constraints, "unique")
-				}
-				break
-			}
-		}
+	for _, cols := range pendingUniques {
+		table.addUniqueConstraint(cols)
 	}
 
 	return table
@@ -286,6 +230,27 @@ func generateColumnProperties(columnDefinition *pgQuery.ColumnDef) *Column {
 	}
 
 	return column
+}
+
+func (t *Table) findColumn(name string) *Column {
+	for _, col := range t.Columns {
+		if col.Name == name {
+			return col
+		}
+	}
+	return nil
+}
+
+func (t *Table) addUniqueConstraint(columns []string) {
+	if len(columns) == 1 {
+		if col := t.findColumn(columns[0]); col != nil {
+			if !slices.Contains(col.Constraints, "unique") {
+				col.Constraints = append(col.Constraints, "unique")
+			}
+		}
+	} else if len(columns) > 1 && !slices.ContainsFunc(t.UniqueConstraints, func(e []string) bool { return slices.Equal(e, columns) }) {
+		t.UniqueConstraints = append(t.UniqueConstraints, columns)
+	}
 }
 
 func constraintColumns(keys []*pgQuery.Node) []string {

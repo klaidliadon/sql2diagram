@@ -74,8 +74,7 @@ func postProcessSVG(svg []byte) []byte {
 		}
 
 		insertAt := headerRect[1]
-		bgBlock := strings.Join(backgrounds, "")
-		return group[:insertAt] + bgBlock + group[insertAt:]
+		return group[:insertAt] + strings.Join(backgrounds, "") + group[insertAt:]
 	})
 
 	result = uniqueRowKeyRE.ReplaceAllString(result, "UNIQUE")
