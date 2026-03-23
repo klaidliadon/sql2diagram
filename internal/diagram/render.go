@@ -3,6 +3,7 @@ package diagram
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/golang-cz/sql2diagram/internal/schema"
 	"oss.terrastruct.com/d2/d2format"
@@ -76,6 +77,10 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 				columnType = fmt.Sprintf("%s (PK)", columnType)
 			}
 
+			if hasConstraint(column.Constraints, "unique") {
+				columnType = fmt.Sprintf("%s (UNIQUE)", columnType)
+			}
+
 			if len(column.ForeignKeyReferences) > 0 {
 				columnType = fmt.Sprintf("%s (FK)", columnType)
 			}
@@ -110,6 +115,15 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 				if _, _, err = d2oracle.Create(g, tableReferences); err != nil {
 					return nil, fmt.Errorf("d2 oracle create: %w", err)
 				}
+			}
+		}
+
+		for i, uniqueColumns := range table.UniqueConstraints {
+			rowName := fmt.Sprintf("UNIQUE_%d", i+1)
+			rowType := fmt.Sprintf("(%s) (UQ)", strings.Join(uniqueColumns, ", "))
+
+			if _, err = d2oracle.Set(g, fmt.Sprintf("%s.%s", table.Name, rowName), nil, &rowType); err != nil {
+				return nil, fmt.Errorf("d2 set unique constraint: %w", err)
 			}
 		}
 	}

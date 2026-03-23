@@ -10,6 +10,7 @@ import (
 
 const (
 	pkRowBackgroundColor = "#FFF3BF"
+	uniqueRowColor       = "#D3F9D8"
 	fkRowBackgroundColor = "#D0EBFF"
 )
 
@@ -86,6 +87,10 @@ func rowBackgroundByConstraint(label string) string {
 
 	if strings.Contains(label, "(PK)") {
 		return pkRowBackgroundColor
+	}
+
+	if strings.Contains(label, "(UNIQUE)") || strings.Contains(label, "(UQ)") {
+		return uniqueRowColor
 	}
 
 	return ""
