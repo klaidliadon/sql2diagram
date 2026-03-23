@@ -38,15 +38,9 @@ type Column struct {
 func Parse(input string) (*Schema, error) {
 	tree, err := pgQuery.Parse(input)
 	if err != nil {
-		return nil, fmt.Errorf("parse SQL statement: %w", err)
+		return nil, fmt.Errorf("parse SQL: %w", err)
 	}
-
-	schema, err := astTreeToSchema(tree)
-	if err != nil {
-		return nil, fmt.Errorf("ast tree to schema: %w", err)
-	}
-
-	return schema, nil
+	return astTreeToSchema(tree)
 }
 
 func astTreeToSchema(tree *pgQuery.ParseResult) (*Schema, error) {
@@ -74,11 +68,7 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 
 	for _, cmd := range stmt.Cmds {
 		node, ok := cmd.Node.(*pgQuery.Node_AlterTableCmd)
-		if !ok {
-			continue
-		}
-
-		if node.AlterTableCmd.Subtype != pgQuery.AlterTableType_AT_AddConstraint {
+		if !ok || node.AlterTableCmd.Subtype != pgQuery.AlterTableType_AT_AddConstraint {
 			continue
 		}
 
@@ -87,39 +77,28 @@ func alterTableStmt(schema *Schema, stmt *pgQuery.AlterTableStmt) error {
 			continue
 		}
 
-		if constraint.Constraint.Contype == pgQuery.ConstrType_CONSTR_PRIMARY {
-			for _, name := range constraintColumns(constraint.Constraint.Keys) {
+		cols := constraintColumns(constraint.Constraint.Keys)
+
+		switch constraint.Constraint.Contype {
+		case pgQuery.ConstrType_CONSTR_PRIMARY:
+			for _, name := range cols {
 				if col := sourceTable.findColumn(name); col != nil {
 					col.Constraints.Add("primary")
 				}
 			}
-			continue
-		}
-
-		if constraint.Constraint.Contype == pgQuery.ConstrType_CONSTR_UNIQUE {
-			sourceTable.addUniqueConstraint(constraintColumns(constraint.Constraint.Keys))
-			continue
-		}
-
-		if constraint.Constraint.Contype != pgQuery.ConstrType_CONSTR_FOREIGN {
-			continue
-		}
-
-		fk := &ForeignReference{Table: constraint.Constraint.Pktable.Relname}
-
-		for _, pkattr := range constraint.Constraint.PkAttrs {
-			if node, ok := pkattr.Node.(*pgQuery.Node_String_); ok {
-				fk.Column = node.String_.Sval
+		case pgQuery.ConstrType_CONSTR_UNIQUE:
+			sourceTable.addUniqueConstraint(cols)
+		case pgQuery.ConstrType_CONSTR_FOREIGN:
+			fk := &ForeignReference{Table: constraint.Constraint.Pktable.Relname}
+			for _, pkattr := range constraint.Constraint.PkAttrs {
+				if n, ok := pkattr.Node.(*pgQuery.Node_String_); ok {
+					fk.Column = n.String_.Sval
+				}
 			}
-		}
-
-		for _, fkattr := range constraint.Constraint.FkAttrs {
-			node, ok := fkattr.Node.(*pgQuery.Node_String_)
-			if !ok {
-				continue
-			}
-			if col := sourceTable.findColumn(node.String_.Sval); col != nil {
-				col.ForeignKeyReferences = append(col.ForeignKeyReferences, fk)
+			for _, name := range cols {
+				if col := sourceTable.findColumn(name); col != nil {
+					col.ForeignKeyReferences = append(col.ForeignKeyReferences, fk)
+				}
 			}
 		}
 	}
@@ -157,7 +136,6 @@ func generateColumnProperties(columnDefinition *pgQuery.ColumnDef) *Column {
 	for _, node := range columnDefinition.TypeName.Names {
 		stringNode, ok := node.Node.(*pgQuery.Node_String_)
 		if !ok {
-			fmt.Printf("unknown name node %v\n", stringNode)
 			continue
 		}
 
@@ -242,16 +220,12 @@ func (c *Column) addForeignKey(con *pgQuery.Constraint) {
 }
 
 func constraintColumns(keys []*pgQuery.Node) []string {
-	columns := make([]string, 0, len(keys))
+	cols := make([]string, 0, len(keys))
 	for _, key := range keys {
-		node, ok := key.Node.(*pgQuery.Node_String_)
-		if !ok {
-			continue
+		if n, ok := key.Node.(*pgQuery.Node_String_); ok {
+			cols = append(cols, n.String_.Sval)
 		}
-
-		columns = append(columns, node.String_.Sval)
 	}
-
-	return columns
+	return cols
 }
 
