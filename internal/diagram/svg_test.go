@@ -48,3 +48,12 @@ func TestPostProcessSVGReplacesUniqueRowKeyAndPreservesRealColumns(t *testing.T)
 		t.Fatalf("expected real unique_1 column label to remain intact: %s", output)
 	}
 }
+
+func TestRowBackgroundByConstraintPrefersForeignKeyColorOverPrimaryKey(t *testing.T) {
+	t.Parallel()
+
+	color := rowBackgroundByConstraint("uuid (PK) (FK)")
+	if color != fkRowBackgroundColor {
+		t.Fatalf("expected FK color %q for combined PK/FK label, got %q", fkRowBackgroundColor, color)
+	}
+}
