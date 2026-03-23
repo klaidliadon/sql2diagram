@@ -1,6 +1,9 @@
 package schema
 
-import "testing"
+import (
+	"slices"
+	"testing"
+)
 
 func TestParseTracksUniqueConstraints(t *testing.T) {
 	t.Parallel()
@@ -22,7 +25,7 @@ CREATE TABLE demo (
 	}
 
 	table := schema.Tables[0]
-	if !contains(table.Columns[0].Constraints, "unique") {
+	if !slices.Contains(table.Columns[0].Constraints, "unique") {
 		t.Fatalf("expected email column to be marked unique, got %v", table.Columns[0].Constraints)
 	}
 
@@ -54,7 +57,7 @@ CREATE TABLE demo (
 		t.Fatalf("expected first column to be email, got %q", email.Name)
 	}
 
-	if !contains(email.Constraints, "unique") {
+	if !slices.Contains(email.Constraints, "unique") {
 		t.Fatalf("expected email column to include unique constraint, got %v", email.Constraints)
 	}
 }

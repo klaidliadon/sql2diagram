@@ -3,6 +3,7 @@ package diagram
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/golang-cz/sql2diagram/internal/schema"
@@ -69,15 +70,15 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 				columnType = fmt.Sprintf("%s(%d)", column.Type, column.Length)
 			}
 
-			if !hasConstraint(column.Constraints, "not null") {
+			if !slices.Contains(column.Constraints, "not null") {
 				columnType += " NULL"
 			}
 
-			if hasConstraint(column.Constraints, "primary") {
+			if slices.Contains(column.Constraints, "primary") {
 				columnType = fmt.Sprintf("%s (PK)", columnType)
 			}
 
-			if hasConstraint(column.Constraints, "unique") {
+			if slices.Contains(column.Constraints, "unique") {
 				columnType = fmt.Sprintf("%s (UNIQUE)", columnType)
 			}
 
@@ -129,14 +130,4 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 	}
 
 	return g, nil
-}
-
-func hasConstraint(constraints []string, value string) bool {
-	for _, constraint := range constraints {
-		if constraint == value {
-			return true
-		}
-	}
-
-	return false
 }
