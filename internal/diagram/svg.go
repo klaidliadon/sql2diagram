@@ -20,6 +20,8 @@ var (
 	headerRectRegex = regexp.MustCompile(`<rect x="[^"]+" y="[^"]+" width="[^"]+" height="36\.000000" class="class_header fill-N1" />`)
 	rowMetaRegex    = regexp.MustCompile(`(?s)<text x="[^"]+" y="[^"]+" class="text fill-N2"[^>]*>([^<]*)</text><text x="[^"]+" y="[^"]+" class="text fill-AA2"[^>]*/><line x1="[^"]+" x2="[^"]+" y1="([^"]+)" y2="[^"]+" class=" stroke-N1"`)
 	uniqueRowKeyRE  = regexp.MustCompile(`__uq_`)
+	// Matches a row's two visible text elements (column name + type).
+	rowTextPairRE = regexp.MustCompile(`(<text x="[^"]+" y="[^"]+" class="text fill-B2" style=")([^"]*)(">(?:[^<]*)</text><text x="[^"]+" y="[^"]+" class="text fill-N2" style=")([^"]*)(">([^<]*)</text>)`)
 )
 
 func postProcessSVG(svg []byte) []byte {
@@ -85,6 +87,22 @@ func postProcessSVG(svg []byte) []byte {
 	})
 
 	result = uniqueRowKeyRE.ReplaceAllString(result, "")
+
+	// Add font-weight:bold for PK rows, font-style:italic for FK rows.
+	result = rowTextPairRE.ReplaceAllStringFunc(result, func(match string) string {
+		sub := rowTextPairRE.FindStringSubmatch(match)
+		typeText := sub[6]
+		var extra string
+		switch {
+		case strings.Contains(typeText, "(PK)"):
+			extra = ";font-weight:bold"
+		case strings.Contains(typeText, "(FK)"):
+			extra = ";font-style:italic"
+		default:
+			return match
+		}
+		return sub[1] + sub[2] + extra + sub[3] + sub[4] + extra + sub[5]
+	})
 
 	return []byte(result)
 }
