@@ -26,7 +26,8 @@ func Render(ctx context.Context, schemaDef *schema.Schema) ([]byte, error) {
 		return nil, fmt.Errorf("transform graph: %w", err)
 	}
 
-	script := d2format.Format(graph.AST)
+	// direction: up makes dagre place FK targets (parent tables) at the top.
+	script := "direction: up\n" + d2format.Format(graph.AST)
 
 	ruler, err := textmeasure.NewRuler()
 	if err != nil {
@@ -86,7 +87,7 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 			}
 
 			for _, fk := range column.ForeignKeyReferences {
-				ref := fmt.Sprintf("%s.%s -> %s.%s", fk.Table, fk.Column, table.Name, column.Name)
+				ref := fmt.Sprintf("%s.%s -> %s.%s", table.Name, column.Name, fk.Table, fk.Column)
 				if _, _, err = d2oracle.Create(g, ref); err != nil {
 					return nil, fmt.Errorf("d2 oracle create: %w", err)
 				}
