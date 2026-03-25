@@ -86,7 +86,7 @@ func transformGraph(schemaDef *schema.Schema, g *d2graph.Graph) (*d2graph.Graph,
 			}
 
 			for _, fk := range column.ForeignKeyReferences {
-				ref := fmt.Sprintf("%s.%s -> %s.%s", table.Name, column.Name, fk.Table, fk.Column)
+				ref := fmt.Sprintf("%s.%s -> %s.%s", fk.Table, fk.Column, table.Name, column.Name)
 				if _, _, err = d2oracle.Create(g, ref); err != nil {
 					return nil, fmt.Errorf("d2 oracle create: %w", err)
 				}
