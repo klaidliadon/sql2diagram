@@ -9,8 +9,8 @@ import (
 )
 
 const (
-	pkRowBackgroundColor = "#FFF3BF"
-	uniqueRowColor       = "#D3F9D8"
+	pkRowBackgroundColor = "#FFE3E3"
+	uniqueRowColor       = "#FFF3BF"
 	fkRowBackgroundColor = "#D0EBFF"
 )
 
