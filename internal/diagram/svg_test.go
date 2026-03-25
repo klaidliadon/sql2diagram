@@ -29,19 +29,19 @@ func TestPostProcessSVGAddsConstraintBackgrounds(t *testing.T) {
 	}
 }
 
-func TestPostProcessSVGReplacesUniqueRowKeyAndPreservesRealColumns(t *testing.T) {
+func TestPostProcessSVGStripsUniqueKeyPrefixAndPreservesRealColumns(t *testing.T) {
 	t.Parallel()
 
-	input := `<g id="demo"><g class="shape" ><rect x="0.000000" y="0.000000" width="345.000000" height="180.000000" class="shape stroke-N1 fill-N7" style="stroke-width:2;" /><rect x="0.000000" y="0.000000" width="345.000000" height="36.000000" class="class_header fill-N1" /><text x="10.000000" y="59.000000" class="text fill-B2" style="text-anchor:start;font-size:20px">unique_1</text><text x="242.000000" y="59.000000" class="text fill-N2" style="text-anchor:start;font-size:20px">text NULL</text><text x="325.000000" y="59.000000" class="text fill-AA2" style="text-anchor:end;font-size:20px;letter-spacing:2px" /><line x1="0.000000" x2="345.000000" y1="72.000000" y2="72.000000" class=" stroke-N1" style="stroke-width:2" /><text x="10.000000" y="95.000000" class="text fill-B2" style="text-anchor:start;font-size:20px">__sql2diagram_unique_1</text><text x="242.000000" y="95.000000" class="text fill-N2" style="text-anchor:start;font-size:20px">(a, b) (UQ)</text><text x="325.000000" y="95.000000" class="text fill-AA2" style="text-anchor:end;font-size:20px;letter-spacing:2px" /><line x1="0.000000" x2="345.000000" y1="108.000000" y2="108.000000" class=" stroke-N1" style="stroke-width:2" /></g></g>`
+	input := `<g id="demo"><g class="shape" ><rect x="0.000000" y="0.000000" width="345.000000" height="180.000000" class="shape stroke-N1 fill-N7" style="stroke-width:2;" /><rect x="0.000000" y="0.000000" width="345.000000" height="36.000000" class="class_header fill-N1" /><text x="10.000000" y="59.000000" class="text fill-B2" style="text-anchor:start;font-size:20px">unique_1</text><text x="242.000000" y="59.000000" class="text fill-N2" style="text-anchor:start;font-size:20px">text NULL</text><text x="325.000000" y="59.000000" class="text fill-AA2" style="text-anchor:end;font-size:20px;letter-spacing:2px" /><line x1="0.000000" x2="345.000000" y1="72.000000" y2="72.000000" class=" stroke-N1" style="stroke-width:2" /><text x="10.000000" y="95.000000" class="text fill-B2" style="text-anchor:start;font-size:20px">__uq_(a, b)</text><text x="242.000000" y="95.000000" class="text fill-N2" style="text-anchor:start;font-size:20px">(UNIQUE)</text><text x="325.000000" y="95.000000" class="text fill-AA2" style="text-anchor:end;font-size:20px;letter-spacing:2px" /><line x1="0.000000" x2="345.000000" y1="108.000000" y2="108.000000" class=" stroke-N1" style="stroke-width:2" /></g></g>`
 
 	output := string(postProcessSVG([]byte(input)))
 
-	if strings.Contains(output, "__sql2diagram_unique_1") {
-		t.Fatalf("expected internal unique key to be removed from SVG: %s", output)
+	if strings.Contains(output, "__uq_") {
+		t.Fatalf("expected __uq_ prefix to be stripped from SVG: %s", output)
 	}
 
-	if !strings.Contains(output, `>UNIQUE</text>`) {
-		t.Fatalf("expected composite unique row label to be normalized: %s", output)
+	if !strings.Contains(output, `>(a, b)</text>`) {
+		t.Fatalf("expected column list to remain after prefix strip: %s", output)
 	}
 
 	if !strings.Contains(output, `>unique_1</text>`) {

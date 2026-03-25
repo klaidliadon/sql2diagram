@@ -19,7 +19,7 @@ var (
 	tableRectRegex  = regexp.MustCompile(`<rect x="([^"]+)" y="([^"]+)" width="([^"]+)" height="([^"]+)" class="shape stroke-N1 fill-N7"[^>]*/>`)
 	headerRectRegex = regexp.MustCompile(`<rect x="[^"]+" y="[^"]+" width="[^"]+" height="36\.000000" class="class_header fill-N1" />`)
 	rowMetaRegex    = regexp.MustCompile(`(?s)<text x="[^"]+" y="[^"]+" class="text fill-N2"[^>]*>([^<]*)</text><text x="[^"]+" y="[^"]+" class="text fill-AA2"[^>]*/><line x1="[^"]+" x2="[^"]+" y1="([^"]+)" y2="[^"]+" class=" stroke-N1"`)
-	uniqueRowKeyRE  = regexp.MustCompile(`__sql2diagram_unique_\d+`)
+	uniqueRowKeyRE  = regexp.MustCompile(`__uq_`)
 )
 
 func postProcessSVG(svg []byte) []byte {
@@ -84,7 +84,7 @@ func postProcessSVG(svg []byte) []byte {
 		return group[:insertAt] + strings.Join(backgrounds, "") + group[insertAt:]
 	})
 
-	result = uniqueRowKeyRE.ReplaceAllString(result, "UNIQUE")
+	result = uniqueRowKeyRE.ReplaceAllString(result, "")
 
 	return []byte(result)
 }
@@ -95,13 +95,10 @@ func rowBackgroundByConstraint(label string) string {
 		return fkRowBackgroundColor
 	case strings.Contains(label, "(PK)"):
 		return pkRowBackgroundColor
-	case strings.Contains(label, "(UNIQUE)"), strings.Contains(label, "(UQ)"):
+	case strings.Contains(label, "(UNIQUE)"):
 		return uniqueRowColor
 	default:
 		return ""
 	}
 }
 
-func uniqueConstraintRowKey(index int) string {
-	return fmt.Sprintf("__sql2diagram_unique_%d", index+1)
-}
