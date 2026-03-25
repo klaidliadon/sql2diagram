@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	pkRowBackgroundColor = "#FFE3E3"
+	pkRowBackgroundColor = "#D3F9D8"
 	uniqueRowColor       = "#FFF3BF"
 	fkRowBackgroundColor = "#D0EBFF"
 )
