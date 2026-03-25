@@ -38,8 +38,19 @@ func postProcessSVG(svg []byte) []byte {
 			return group
 		}
 
-		tableX := tableRectMatch[1]
-		tableWidth := tableRectMatch[3]
+		tableX, err := strconv.ParseFloat(tableRectMatch[1], 64)
+		if err != nil {
+			return group
+		}
+		tableWidth, err := strconv.ParseFloat(tableRectMatch[3], 64)
+		if err != nil {
+			return group
+		}
+
+		// Inset by border stroke width so backgrounds don't cover table borders.
+		const borderWidth = 2
+		bgX := tableX + borderWidth
+		bgWidth := tableWidth - borderWidth*2
 
 		var backgrounds []string
 		rowMatches := rowMetaRegex.FindAllStringSubmatch(group, -1)
@@ -54,14 +65,14 @@ func postProcessSVG(svg []byte) []byte {
 				continue
 			}
 
-			rowBackgroundColor := rowBackgroundByConstraint(rowLabel)
-			if rowBackgroundColor == "" {
+			color := rowBackgroundByConstraint(rowLabel)
+			if color == "" {
 				continue
 			}
 
 			backgrounds = append(backgrounds, fmt.Sprintf(
-				`<rect x="%s" y="%.6f" width="%s" height="36.000000" class="row_constraint_bg" style="fill:%s;stroke:none;" />`,
-				tableX, lineY-36, tableWidth, rowBackgroundColor,
+				`<rect x="%.6f" y="%.6f" width="%.6f" height="36.000000" class="row_constraint_bg" style="fill:%s;stroke:none;" />`,
+				bgX, lineY-36, bgWidth, color,
 			))
 		}
 
